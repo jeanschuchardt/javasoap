@@ -10,7 +10,7 @@ public class Jogador {
 	
 	private String nome;
 	private int indentificador;
-	private int bolas;
+	//private int bolas;
 	
 	
 	

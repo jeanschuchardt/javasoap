@@ -16,7 +16,8 @@ public class Dado {
 	}
 
 	public int valorDado() {
-		return gerador.nextInt(6) + 1;
+		//return gerador.nextInt(6) + 1;
+		return 6;
 	}
 
 }
