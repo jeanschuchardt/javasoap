@@ -57,12 +57,14 @@ public class Speculate {
 	}
 
 	public int registraJogador(String nomeJogador) {
+		Jogador jogador = null;
 		for (int i = 0; i < nPartidas; i++) {
 			for (int j = 0; j < nJogadores; j++) {
 
 				if (null != preRegistro[i][j]) {
 					if (preRegistro[i][j].getNome().equals(nomeJogador)) {
 						registro[i][j] = preRegistro[i][j];
+						jogador = preRegistro[i][j];
 						preRegistro[i][j] = null;
 						Jogador j1;
 						Jogador j2;
@@ -85,13 +87,38 @@ public class Speculate {
 				}
 			}
 		}
-
+		if (jogador != null) {
+			return jogador.getIndentificador();
+		}
 		return 0;
+		// TODO: -1 JOGADOR JA CADASTRADO
+		// TODO: -2 NUMERO MAXIMO DE JOGADORES ATINGIDOS
+
 	}
 
 	public int encerraPartida(int idJogador) {
+		int i = 0;
+		for (Partida partida : partidasl) {
+			if (idJogador == partida.getIdJ1()) {
+				if (partida.getBolasJ1() > 0 && partida.getBolasJ2() > 0) {
+					partida.setPartidaFinalizada(true);
+					partida.setJogadorFinalizadaor("J1");
+					partida.setJogadorGanhador(partida.getJogador2());
+					return 0;
+				}
+			} else if (idJogador == partida.getIdJ2()) {
+				if (partida.getBolasJ1() > 0 && partida.getBolasJ2() > 0) {
+					partida.setPartidaFinalizada(true);
+					partida.setJogadorFinalizadaor("J1");
+					partida.setJogadorGanhador(partida.getJogador1());
+					return 0;
+				}
+			}
+			i++;
+		}
+		return -1;
+		// TODO: JOGADOR WO
 
-		return 0;
 	}
 
 	public int temPartida(int idJogador) {
@@ -121,6 +148,12 @@ public class Speculate {
 		}
 
 		return 0;
+		// TODO: -2 TEMPO ESGOTADO
+		/*
+		 * -1 ERRO 0 NAO HA PARTIDA 1 HA PARTIDA E É O JOGADOR QUE INICIA 2 HA PARTIDA E
+		 * É O SEGUNDO JOGADOR QUE INICIA
+		 * 
+		 */
 	}
 
 	public String obtemOponente(int idJogador) {
@@ -131,14 +164,14 @@ public class Speculate {
 						if (null != registro[i][j + 1].getNome()) {
 							return registro[i][j + 1].getNome();
 						} else {
-							return null;
+							return "";
 						}
 						// registro[i][j+1].getNome();
 					} else if (j == 1) {
 						if (null != registro[i][j - 1].getNome()) {
 							return registro[i][j - 1].getNome();
 						} else {
-							return null;
+							return "";
 						}
 
 					}
@@ -148,7 +181,10 @@ public class Speculate {
 			}
 		}
 
-		return null;
+		return "";
+		/*
+		 * RETORNA NOME OU VAZIO
+		 */
 	}
 
 	public int ehMinhaVez(int idJogador) {
@@ -156,25 +192,64 @@ public class Speculate {
 		for (Partida partida : partidasl) {
 			String ehVez = partida.getEhVez();
 			if (idJogador == partida.getIdJ1()) {
+				// System.out.println(partida.isPartidaFinalizada());
+				if (!partida.isPartidaFinalizada()) {
+					if (partida.getJogadasJ1() == 0) {
+						partida.trocaVez();
+					}
+					if (partida.getBolasJ2() == 0) {
+						return 3;
+					}
+					if (partida.getBolasJ1() == 0) {
+						return 2;
+					}
+					if (ehVez == "J1") {
+						return 1;
+					}
+				} else {
+					if (partida.getJogadorFinalizadaor() == "J1") {
+						return 6;
+					} else {
+						return 5;
+					}
 
-				if (ehVez == "J1") {
-					return 1;
 				}
 
 			} else if (idJogador == partida.getIdJ2()) {
-				if (ehVez == "J2") {
-					return 1;
-				}
+				if (!partida.isPartidaFinalizada()) {
+					// System.out.println(partida.isPartidaFinalizada());
+					if (partida.getJogadasJ2() == 0) {
+						partida.trocaVez();
+					}
+					if (partida.getBolasJ1() == 0) {
+						return 3;
+					}
+					if (partida.getBolasJ2() == 0) {
+						return 2;
+					}
+					if (ehVez == "J2") {
+						return 1;
+					}
+				} else {
+					if (partida.getJogadorFinalizadaor() == "J2") {
+						return 6;
+					} else {
+						return 5;
+					}
 
+				}
 			}
 			i++;
 		}
-		return -1; // jogador nao encontrad;o
-		// TODO: - 2 algum erro
+		return -1; // jogador nao encontrado
+		// TODO: - 2 ERRO (AINDA NAO HA JOGADORES)
 		// TODO: 2 é vencedor
 		// TODO: 3 é perdedor
 		// TODO: 5 vencedor por wo
 		// TODO: 6 perdedor por wo
+		// TODO: 0 NAO
+		// TODO 1 SIM
+
 	}
 
 	public int obtemNumBolas(int idJogador) {
@@ -284,16 +359,16 @@ public class Speculate {
 						System.out.println("bolas jogador: " + p.getBolasJ1());
 						p.decrementaJogadasJ1();
 
-						if (p.getJogadasJ1() == 0) {
-							p.trocaVez();
-						}
+//						if (p.getJogadasJ1() == 0) {
+//							p.trocaVez();
+//						}
 
 						partidasl.remove(index);
 						partidasl.add(index, p);
 
 						return valorDado;
 					}
-				} else if (p.getIdJ1()== idJogador && p.getJogadasJ1() == 0 && p.getEhVez()=="J1") {
+				} else if (p.getIdJ1() == idJogador && p.getJogadasJ1() == 0 && p.getEhVez() == "J1") {
 					return -4;
 				}
 			} else {
@@ -322,22 +397,22 @@ public class Speculate {
 
 						System.out.println("bolas jogador: " + p.getBolasJ2());
 						p.decrementaJogadasJ2();
-						if (p.getJogadasJ2() == 0) {
-							p.trocaVez();
-						}
+//						if (p.getJogadasJ2() == 0) {
+//							p.trocaVez();
+//						}
 
 						partidasl.remove(index);
 						partidasl.add(index, p);
 
 						return valorDado;
 					}
-				} else if (p.getIdJ2()== idJogador && p.getJogadasJ2() == 0 && p.getEhVez()=="J2") {
+				} else if (p.getIdJ2() == idJogador && p.getJogadasJ2() == 0 && p.getEhVez() == "J2") {
 					return -4;
 				}
 			}
 
 		} catch (Exception e) {
-			//System.out.println(e.getCause());
+			// System.out.println(e.getCause());
 			return -2;
 		}
 

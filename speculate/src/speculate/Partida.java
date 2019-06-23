@@ -22,7 +22,7 @@ public class Partida {
 	private int jogadasJ2;
 	private String ehVez = "J1";
 
-	private boolean partidaFinalizada = false;
+	private boolean partidaFinalizada ;
 	private String jogadorFinalizadaor = "";
 	private Jogador jogadorPerdedor;
 	private Jogador jogadorGanhador;
@@ -61,9 +61,10 @@ public class Partida {
 	public Partida(Jogador jogador1, Jogador jogador2) {
 		this.jogador1 = jogador1;
 		this.jogador2 = jogador2;
-		bolasJ1 = 15;
-		bolasJ2 = 15;
+		bolasJ1 = 2;
+		bolasJ2 = 2;
 		dado = new Dado(jogador1.getIndentificador(), jogador2.getIndentificador());
+		partidaFinalizada = false;
 
 	}
 

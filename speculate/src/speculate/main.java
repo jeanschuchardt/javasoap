@@ -142,15 +142,26 @@ public class main {
 			contador++;
 			if(a.obtemNumBolas(1)==0) {
 				break;
-			}if(a.obtemNumBolas(2)==0) {
+			}if(a.obtemNumBolas(2)==1) {
 				break;
 			}
 		
 		}
+		
+		
 		System.out.println(a.jogaDado(23421));
 		System.out.println(a.obtemTabuleiro(1));
 		System.out.println(contador);
+		
+		System.out.println(">>>");
+		System.out.println(a.encerraPartida(1));
+		
+		System.out.println(">>>");
+		System.out.println("J1 "+a.ehMinhaVez(1));
+		System.out.println("J2 "+a.ehMinhaVez(2));
 //
+		System.out.println(a.obtemNumBolas(1));
+		System.out.println(a.obtemNumBolas(2));
 //		System.out.println();
 //		System.out.println(a.partidasl.size());
 //
