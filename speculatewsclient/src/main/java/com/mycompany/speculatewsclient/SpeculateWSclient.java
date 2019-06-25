@@ -16,16 +16,20 @@ import java.util.Scanner;
  */
 public class SpeculateWSclient {
 
-    public static speculatewsclient.SpeculateWS port;
+    public static com.mycompany.speculatewebservice.Speculate port;
     /**
      * @param args the command line arguments
      * @throws java.io.IOException
      */
     public static void main(String[] args) throws IOException {
-        speculatewsclient.SpeculateWS_Service service = new speculatewsclient.SpeculateWS_Service();
-        port = service.getSpeculateWSPort();
+       com.mycompany.speculatewebservice.SpeculateWSService service = new com.mycompany.speculatewebservice.SpeculateWSService();
+        port = service.getSpeculatePort();
 
-        executaTeste("Speculate-0000",false);
+        
+        //executaTeste("Speculate-0000",false);
+        //executaTeste("Speculate-1000",false);
+        executaTeste("Speculate-2000",false);
+        //1min38s
         /*
         String[] testePar1 = {"Speculate-2000","Speculate-2250","Speculate-2500","Speculate-2750"};
         executaTesteParalelo(testePar1);
