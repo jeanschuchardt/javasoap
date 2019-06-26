@@ -1,450 +1,353 @@
 package com.mycompany.speculateWebService;
 
-import com.mycompany.speculatews_service.speculate.Dado;
 import com.mycompany.speculatews_service.speculate.Jogador;
 import com.mycompany.speculatews_service.speculate.Partida;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
 import javax.jws.WebMethod;
 import javax.jws.WebParam;
 import javax.jws.WebService;
 
+import java.util.Hashtable;
+import java.util.Map;
+import java.util.concurrent.Semaphore;
+
 @WebService(serviceName = "SpeculateWS_Service")
 public class Speculate {
-
-    final int nJogadores = 2;
-    final int nPartidas = 500;
-    int contadorPreRegistroX = 0;
-    int contadorPreRegistroY = 0;
-    int contadorRegistroX = 0;
-    int contadorRegistroY = 0;
-    Partida[] partidas;
-    int contadorPartida = 0;
-    Jogador[][] preRegistro;
-    Jogador[][] registro;
-    int[] tabuleiro;
-    List<Partida> partidasl;
-
-    public Speculate() {
-        this.preRegistro = new Jogador[nPartidas][nJogadores];
-
-        this.registro = new Jogador[nPartidas][nJogadores];
-        this.partidas = new Partida[nPartidas];
-        this.partidasl = new ArrayList();
-        for (int i = 0; i < nPartidas; i++) {
-            for (int j = 0; j < nJogadores; j++) {
-                this.registro[i][j] = new Jogador();
-            }
-        }
+    
+    private static final int maxJogos = 500;
+    private static final int maxJogadores = 2  * maxJogos;
+    private static Map<String, Jogador[]> preRegistro = new Hashtable<String, Jogador[]>(maxJogadores);
+    private static Map<Integer, Partida> dictPartidas = new Hashtable<Integer, Partida>(maxJogadores);
+    private static Map<String, Jogador> jogadoresRegistrados = new Hashtable<String, Jogador>(maxJogadores);
+    private static Map<Integer, Partida> partidasRegistradas = new Hashtable<Integer, Partida>(maxJogos);
+    private static Jogador jogadorEmEspera = null;
+    private static Semaphore semaforo = new Semaphore(1);
+    private static int partidaID = 0;
+    
+    private synchronized Partida getPartida(int id) {
+	return dictPartidas.get(id);
     }
-
-    @WebMethod(operationName = "hello")
-    public String hello(@WebParam(name = "name") String txt) {
-        return "Hello " + txt + " !";
-    }
-
+    
     @WebMethod(operationName = "preRegistro")
-    public int preRegistro(@WebParam(name = "nomeJogador1") String nomeJogador1, @WebParam(name = "idJ1") int idJ1, @WebParam(name = "nomeJogador2") String nomeJogador2, @WebParam(name = "idJ2") int idJ2) {
-        Jogador j1 = new Jogador(nomeJogador1, idJ1);
-        Jogador j2 = new Jogador(nomeJogador2, idJ2);
-
-        this.preRegistro[this.contadorPreRegistroX][this.contadorPreRegistroY] = j1;
-
-        incrementaCoontadorPreRegistroY();
-        System.out.println("J1 "+this.contadorPreRegistroX+","+this.contadorPreRegistroY);
-        
-
-        this.preRegistro[this.contadorPreRegistroX][this.contadorPreRegistroY] = j2;
-
-        System.out.println("J2 "+this.contadorPreRegistroX+","+this.contadorPreRegistroY);
-        incrementaCoontadorPreRegistroX();
-        incrementaCoontadorPreRegistroY();
-        System.out.println("next "+this.contadorPreRegistroX+","+this.contadorPreRegistroY);
+    public int preRegistro(@WebParam(name = "p1Name") String p1Name, @WebParam(name = "p1ID") int p1ID,
+        @WebParam(name = "p2Name") String p2Name, @WebParam(name = "p2ID") int p2ID) {
+        Jogador jogador1 = new Jogador(p1ID, p1Name);
+        Jogador jogador2 = new Jogador(p2ID, p2Name);
+        Jogador[] jogador1Data = {jogador1, jogador2};
+        Jogador[] jogador2Data = {jogador2, jogador1};
+        System.out.println("Pré registrando jogadores: "+p1Name+" e " + p2Name);
+        preRegistro.put(p1Name, jogador1Data);
+        preRegistro.put(p2Name, jogador2Data);
         return 0;
     }
-
+    
     @WebMethod(operationName = "registraJogador")
-    public int registraJogador(@WebParam(name = "nomeJogador") String nomeJogador) {
-        Jogador jogador = null;
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 2; j++) {
-                if ((null != this.preRegistro[i][j])
-                        && (this.preRegistro[i][j].getNome().equals(nomeJogador))) {
-                    this.registro[i][j] = this.preRegistro[i][j];
-                    jogador = this.preRegistro[i][j];
-                    this.preRegistro[i][j] = null;
-                    if (j == 0) {
-                        Jogador j1 = this.registro[i][j];
-                        Jogador j2 = this.registro[i][(j + 1)];
-                        if ((null != j1.getNome()) && (null != j2.getNome())) {
-                            this.partidasl.add(new Partida(this.registro[i][j], this.registro[i][(j + 1)]));
-                        }
-                    } else if (j == 1) {
-                        Jogador j1 = this.registro[i][(j - 1)];
-                        Jogador j2 = this.registro[i][j];
-                        if ((null != j1.getNome()) && (null != j2.getNome())) {
-                            this.partidasl.add(new Partida(this.registro[i][(j - 1)], this.registro[i][j]));
-                        }
-                    }
-                }
-            }
-        }
-        if (jogador != null) {
-            return jogador.getIndentificador();
-        }
-        return -1;
-    }
+    public int registraJogador(@WebParam(name = "name") String name) {
+        int codigoDeRetorno = 0;
+        try{
+            semaforo.acquire();
+            //caso o jogador j� esteja cadastrado
+            if (jogadoresRegistrados.containsKey(name)) {
+                codigoDeRetorno = -1;
+                //caso o n�mero de jogadores esteja no limite
+            } else if (jogadoresRegistrados.size() == maxJogadores) {
+                codigoDeRetorno = -2;
+                // caso o maximo de partidas suportadas tenha sido alcan�ado
+            } else if (partidasRegistradas.size() == maxJogos) {
+                return -3;
+                //caso esteja tudo OK para cadastrar o jogador
+            } else {
+                Jogador[] jogadoresData = preRegistro.get(name);
+                Jogador jogador1 = jogadoresData[0];
+                Jogador jogador2 = jogadoresData[1];
+                int id = jogador1.getIndentificador();
+                preRegistro.remove(name);
 
+                // verifica se o oponente já foi registrado
+                if (preRegistro.get(jogador2.getNome()) == null) {
+                    Partida partida = new Partida(partidaID++);
+                    partida.setJogador1(jogador2);
+                    partida.setJogador2(jogador1);
+                    partida.criaDado();
+                    partida.criaTabuleiro();
+                    partida.setProximoJogador(jogador2);
+                    dictPartidas.put(jogador1.getIndentificador(), partida);
+                    dictPartidas.put(jogador2.getIndentificador(), partida);
+                    jogadoresRegistrados.put(jogador1.getNome(), jogador1);
+                    jogadoresRegistrados.put(jogador2.getNome(), jogador2);
+                    System.out.println("Partida Registrada entre: " + jogador1.getNome() + " e " + jogador2.getNome());
+                }
+                codigoDeRetorno = id;
+
+            }
+        }catch(Exception e){
+            System.out.println("Erro em registraJogador");
+            e.printStackTrace();
+        }finally{
+            semaforo.release();
+        }
+        return codigoDeRetorno;
+    }
+    
     @WebMethod(operationName = "encerraPartida")
-    public int encerraPartida(@WebParam(name = "idJogador") int idJogador) {
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            if (idJogador == partida.getIdJ1()) {
-                if ((partida.getBolasJ1() > 0) && (partida.getBolasJ2() > 0)) {
-                    partida.setPartidaFinalizada(true);
-                    partida.setJogadorFinalizadaor("J1");
-                    partida.setJogadorGanhador(partida.getJogador2());
-                    return 0;
-                }
-                return 0;
-            } else if (idJogador == partida.getIdJ2()) {
-                if ((partida.getBolasJ1() > 0) && (partida.getBolasJ2() > 0)) {
-                    partida.setPartidaFinalizada(true);
-                    partida.setJogadorFinalizadaor("J1");
-                    partida.setJogadorGanhador(partida.getJogador1());
-                    return 0;
-                }
-                return 0;
-            }
-
-            i++;
-        }
-        return -1;
-    }
-
-    @WebMethod(operationName = "temPartida")
-    public int temPartida(@WebParam(name = "idJogador") int idJogador) {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 2; j++) {
-                if (idJogador == this.registro[i][j].getIndentificador()) {
-                    if (j == 0) {
-                        if (null != this.registro[i][(j + 1)].getNome()) {
-                            return 1;
-                        }
-                        return 0;
-                    }
-                    if (j == 1) {
-                        if (null != this.registro[i][(j - 1)].getNome()) {
-                            return 2;
-                        }
-                        return 0;
-                    }
-                }
-            }
-        }
-        return 0;
-    }
-
-    @WebMethod(operationName = "obtemOponente")
-    public String obtemOponente(@WebParam(name = "idJogador") int idJogador) {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 2; j++) {
-                if (idJogador == this.registro[i][j].getIndentificador()) {
-                    if (j == 0) {
-                        if (null != this.registro[i][(j + 1)].getNome()) {
-                            return this.registro[i][(j + 1)].getNome();
-                        }
-                        return "";
-                    }
-                    if (j == 1) {
-                        if (null != this.registro[i][(j - 1)].getNome()) {
-                            return this.registro[i][(j - 1)].getNome();
-                        }
-                        return "";
-                    }
-                }
-            }
-        }
-        return "";
-    }
-
-    @WebMethod(operationName = "ehMinhaVez")
-    public int ehMinhaVez(@WebParam(name = "idJogador") int idJogador) {
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            String ehVez = partida.getEhVez();
-            if (idJogador == partida.getIdJ1()) {
-                if (!partida.isPartidaFinalizada()) {
-//                    if (partida.getJogadasJ1() == 0) {
-//                        partida.trocaVez();
-//                    }
-                    if (partida.getBolasJ2() == 0) {
-                        return 3;
-                    }
-                    if (partida.getBolasJ1() == 0) {
-                        return 2;
-                    }
-                    if (ehVez == "J1") {
-                        return 1;
-                    }
-                    if (ehVez == "J2") {
-                        return 0;
-                    }
+    public int encerraPartida(@WebParam(name = "id") int id) {
+        int codigoDeRetorno = -1;
+        
+        try{
+            semaforo.acquire();
+            Partida partida = this.getPartida(id);
+        // existe a partida deste jogador
+        if(partida != null) {
+            codigoDeRetorno = 0;
+                // partida est� sendo encerrada antes do termino do jogo
+                if(partida.getVencedor() == null) {
+                        partida.setDesistencia(true);
+                // partida esta sendo encerrada depois do vencedor ser definido
                 } else {
-                    if (partida.getJogadorFinalizadaor() == "J1") {
-                        return 6;
-                    }
-                    return 5;
-                }
-            } else if (idJogador == partida.getIdJ2()) {
-                if (!partida.isPartidaFinalizada()) {
-//                    if (partida.getJogadasJ2() == 0) {
-//                        partida.trocaVez();
-//                    }
-                    if (partida.getBolasJ1() == 0) {
-                        return 3;
-                    }
-                    if (partida.getBolasJ2() == 0) {
-                        return 2;
-                    }
-                    if ("J2".equals(ehVez)) {
-                        return 1;
-                    }
-                    if (ehVez == "J1") {
-                        return 0;
-                    }
-                } else {
-                    if ("J2".equals(partida.getJogadorFinalizadaor())) {
-                        return 6;
-                    }
-                    return 5;
-                }
-            }
-            i++;
-        }
-        return -2;
-    }
-
-    @WebMethod(operationName = "obtemNumBolas")
-    public int obtemNumBolas(@WebParam(name = "idJogador") int idJogador) {
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            if (idJogador == partida.getIdJ1()) {
-                return partida.getBolasJ1();
-            }
-            if (idJogador == partida.getIdJ2()) {
-                return partida.getBolasJ2();
-            }
-            i++;
-        }
-        return -1;
-    }
-
-    @WebMethod(operationName = "obtemNumBolasOponente")
-    public int obtemNumBolasOponente(@WebParam(name = "idJogador") int idJogador) {
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            if (idJogador == partida.getIdJ1()) {
-                return partida.getBolasJ2();
-            }
-            if (idJogador == partida.getIdJ2()) {
-                return partida.getBolasJ1();
-            }
-            i++;
-        }
-        return -1;
-    }
-
-    @WebMethod(operationName = "obtemTabuleiro")
-    public String obtemTabuleiro(@WebParam(name = "idJogador") int idJogador) {
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            String ehVez = partida.getEhVez();
-            if (idJogador == partida.getIdJ1()) {
-                return partida.getTabuleiroString();
-            }
-            if (idJogador == partida.getIdJ2()) {
-                return partida.getTabuleiroString();
-            }
-            i++;
-        }
-        return "";
-    }
-
-    @WebMethod(operationName = "defineJogadas")
-    public int defineJogadas(@WebParam(name = "idJogador") int idJogador, @WebParam(name = "numJogadas") int numJogadas) {
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            if (idJogador == partida.getIdJ1()) {
-                if (numJogadas <= partida.getBolasJ1()) {
-                    if ("J1".equals(partida.getEhVez())) {
-                        partida.setJogadasJ1(numJogadas);
-                        return 1;// partida.setJogadasJ1(numJogadas);
-                    } else {
-                        return -3;
-                    }
-                } else {
-                    return -5;
-                }
-            } else if (idJogador == partida.getIdJ2()) {
-                if (numJogadas <= partida.getBolasJ2()) {
-                    if ("J2".equals(partida.getEhVez())) {
-                        partida.setJogadasJ2(numJogadas);
-                        return 1;// partida.setJogadasJ2(numJogadas);
-                    } else {
-                        return -3;
-                    }
-                } else {
-                    return -5;
-                }
-            }
-            return -2;
-            //tirei o return -1 para tentar solucionar um erro 
-        }
-        return -2;
-    }
-
-    @WebMethod(operationName = "jogaDado")
-    public int jogaDado(@WebParam(name = "idJogador") int idJogador
-    ) {
-        Partida p = null;
-        int index = -1;
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            if ((idJogador == partida.getIdJ1()) || (idJogador == partida.getIdJ2())) {
-                p = partida;
-                index = i;
-            }
-        }
-        try {
-            if ("J1".equals(p.getEhVez())) {
-                if (p.getJogadasJ1() != 0) {
-                    if (p.getIdJ1() == idJogador) {
-                        int valorDado = p.getDado().valorDado();
-                        //  System.out.println("valor dado: " + valorDado);
-                        valorDado -= 1;
-                        String[] t = p.getTabuleiro();
-                        if (valorDado == 5) {
-                            p.dencrementaBolasJ1();
-                        } else if ("*".equals(t[valorDado])) {
-                            t[valorDado] = ("" + (valorDado + 1));
-                            p.incrementaBolasJ1();
+                        // caso um jogador j� tenha encerrado a sua sess�o, os requicios da partida s�o limpos
+                        if(partida.getPartidaTerminada()) {
+                                System.out.println("Partida encerrada entre: " + partida.getJogador1().getNome() + " e " + partida.getJogador2().getNome());
+                                partidasRegistradas.remove(partida.getId());
+                                
+                        // caso contrario, o primeiro cliente a fechar a partida indica na classe partida
                         } else {
-                            t[valorDado] = "*";
-                            p.dencrementaBolasJ1();
+                                partida.terminarPartida();
                         }
-                        //  System.out.println("bolas jogador: " + p.getBolasJ1());
-                        p.decrementaJogadasJ1();
-                        if (p.getJogadasJ1() == 0) {
-                            if (p.getBolasJ1() == 0) {
-                                p.setJogadorGanhador(p.getJogador1());
-                                p.setJogadorPerdedor(p.getJogador2());
-                            }
-                            p.trocaVez();
-                        }
-
-                        this.partidasl.remove(index);
-                        this.partidasl.add(index, p);
-
-                        return valorDado + 1;
-                    }
-                } else if ((p.getIdJ1() == idJogador) && (p.getJogadasJ1() == 0) && ("J1".equals(p.getEhVez()))) {
-                    return -4;
                 }
-            } else if (p.getJogadasJ2() != 0) {
-                if (p.getIdJ2() == idJogador) {
-                    int valorDado = p.getDado().valorDado();
-                    //    System.out.println("valor dado: " + valorDado);
-                    valorDado -= 1;
-
-                    String[] t = p.getTabuleiro();
-                    if (valorDado == 5) {
-                        p.dencrementaBolasJ2();
-                    } else if ("*".equals(t[valorDado])) {
-                        t[valorDado] = ("" + (valorDado + 1));
-                        p.incrementaBolasJ2();
-                    } else {
-                        t[valorDado] = "*";
-                        p.dencrementaBolasJ2();
-                    }
-                    p.decrementaJogadasJ2();
-
-                    if (p.getJogadasJ2() == 0) {
-                        if (p.getBolasJ2() == 0) {
-                            p.setJogadorGanhador(p.getJogador2());
-                            p.setJogadorPerdedor(p.getJogador1());
-                        }
-                        p.trocaVez();
-                    }
-                    this.partidasl.remove(index);
-                    this.partidasl.add(index, p);
-
-                    return valorDado + 1;
+                // a liga��o entre jogador e partida � removida da estrutura
+                dictPartidas.remove(id);
+                String nome = "";
+                if(partida.getJogador1().getIndentificador()== id) {
+                        nome = partida.getJogador1().getNome();
+                } else {
+                        nome = partida.getJogador2().getNome();
                 }
-            } else if ((p.getIdJ2() == idJogador) && (p.getJogadasJ2() == 0) && ("J2".equals(p.getEhVez()))) {
-                return -4;
+                // o registro do jogador � removido da estrutura
+                jogadoresRegistrados.remove(nome);
             }
-        } catch (Exception e) {
-            return -2;
+        }catch(Exception e){
+            System.out.println("Erro em encerraPartida");
+            e.printStackTrace();
+        }finally{
+            semaforo.release();
         }
-        return -3;
+        
+        
+        return codigoDeRetorno;
     }
-
-    private int buscapartida(int idJogador) {
-        int i = 0;
-        for (Partida partida : this.partidasl) {
-            if (idJogador == partida.getIdJ1()) {
-                return i;
-            }
-            if (idJogador == partida.getIdJ1()) {
-                return i;
-            }
-            i++;
+    
+    @WebMethod(operationName = "temPartida")
+    public int temPartida(@WebParam(name = "id") int id) {
+        Partida partida = this.getPartida(id);
+        if(partida == null) {
+                return 0;
         }
+
+        Jogador jogador1 = partida.getJogador1();
+        Jogador jogador2 = partida.getJogador2();
+
+        if(jogador2 == null) {
+                return 0;
+        }
+
+        if(jogador1.getIndentificador() == id) {
+                return 1;
+        }
+
+        if(jogador2.getIndentificador() == id) {
+                return 2;
+        }
+
         return -1;
     }
-
-    private void incrementaCoontadorPreRegistroY() {
-        if (this.contadorPreRegistroY == 0) {
-            this.contadorPreRegistroY = 1;
-        } else if (this.contadorPreRegistroY == 1) {
-            this.contadorPreRegistroY = 0;
+    
+    @WebMethod(operationName = "obtemOponente")
+    public String obtemOponente(@WebParam(name = "id") int id) {
+        Partida partida = this.getPartida(id);
+        if(partida != null) {
+                Jogador jogador1 = partida.getJogador1();
+                Jogador jogador2 = partida.getJogador2();
+                
+                if(jogador1 == null){
+                    return "";
+                }
+                
+                if(jogador1.getIndentificador() == id) {
+                        if(jogador2 != null) {
+                                return jogador2.getNome();
+                        }
+                } else {
+                        return jogador1.getNome();
+                }
         }
+        return "";
     }
+    
+    @WebMethod(operationName = "ehMinhaVez")
+    public int ehMinhaVez(@WebParam(name = "id") int id) {
+        Partida partida = this.getPartida(id);
+		
+        // jogador n�o encontrado em nunhuma partida
+        if(partida == null) {
+                return -2;
+        }
 
-    private void incrementaCoontadorPreRegistroX() {
-        if (this.contadorPreRegistroX < nPartidas) {
-            this.contadorPreRegistroX += 1;
+        // caso n�o tenha 2 jogadores na partida
+        if(partida.getJogador2() == null) {
+                return -2;
+        }
+
+        // caso ainda n�o tenha vencedor na partida
+        if(partida.getVencedor() == null) {
+                // proxima jogada � do cliente que fez a chamada
+                if(partida.getProximoJogador().getIndentificador() == id) {
+                        return 1;
+                }
+                // proxima jogada � do oponente;
+                return 0;
+        // j� est� definido o vencedor
         } else {
-            throw new IllegalArgumentException();
+                Jogador vencedor = partida.getVencedor();
+                // caso o jogo tenha acabado devido a uma desistencia
+                if(partida.getDesistencia() == true) {
+                        // vencedor por WO � o cliente que fez a chamada
+                        if(vencedor.getIndentificador() == id) {
+                                return 5;
+                        }
+                        // perdedor por WO � o cliente qu efez a chamada
+                        return 6;
+                } else {
+                        // vencedor � o cliente que fez a chamada
+                        if(vencedor.getIndentificador() == id) {
+                                return 2;
+                        }
+                        // perdedor � o cliente que fez a chamada
+                        return 3;
+                }
         }
     }
-
-    private int partidaVazia() {
-        int index = 0;
-        for (Partida partida : this.partidasl) {
-            if (partida.temEspaco() == 0) {
-                return index;
-            }
-            index++;
+    
+    private int obtemBolasDoJogador(int id, Boolean minhasBolas) {
+        Partida partida = this.getPartida(id);
+        // caso o jogador n�o esteja em nenhuma partida
+        if(partida == null) {
+                return -1;
         }
+
+        Jogador jogador1 = partida.getJogador1();
+        Jogador jogador2 = partida.getJogador2();
+
+        // caso n�o tenha um segundo jogador cadastrado na partida
+        if(jogador2 == null) {
+                return -2;
+        }
+
+        // caso esteja querendo saber quantas bolas eu tenho
+        if(minhasBolas) {
+                if(jogador1.getIndentificador() == id) {
+                        return jogador1.getBolas();
+                }
+                return jogador2.getBolas();
+        // caso esteja querendo saber quantas bolas meu oponente tem
+        } else {
+                if(jogador1.getIndentificador() == id) {
+                        return jogador2.getBolas();
+                }
+                return jogador1.getBolas();
+        }
+
+    }
+    
+    @WebMethod(operationName = "obtemNumBolas")
+    public int obtemNumBolas(@WebParam(name = "id") int id) {
+        return this.obtemBolasDoJogador(id, true);
+    }
+    
+    @WebMethod(operationName = "obtemNumBolasOponente")
+    public int obtemNumBolasOponente(@WebParam(name = "id") int id) {
+        return this.obtemBolasDoJogador(id, false);
+    }
+    
+    @WebMethod(operationName = "obtemTabuleiro")
+    public String obtemTabuleiro(@WebParam(name = "id") int id) {
+        Partida partida = this.getPartida(id);
+        if(partida == null || partida.getTabuleiro() == null)
+                return "";
+
+        return partida.getTabuleiro().obtemEstadoDoTabuleiro();
+    }
+    
+    @WebMethod(operationName = "defineJogadas")
+    public int defineJogadas(@WebParam(name = "id") int id, @WebParam(name = "jogadas") int jogadas) {
+        Partida partida = this.getPartida(id);
+
+        //caso n�o tenha partida
+        if(partida == null || partida.getJogador1() == null) {
+                return -2;
+        }
+
+        //erro, acredito que seja n�o ter o jogador 2
+        if(partida.getJogador2() == null) {
+                return -1;
+        }
+
+        // caso n�o seja a vez do jogaodr
+        if(partida.getProximoJogador().getIndentificador() != id) {
+                return -3;
+        }
+
+        // caso seja a vez do jogador
+        if(partida.getProximoJogador().getIndentificador() == id) {
+                // � a vez do jogador mas o jogo j� foi encerrado
+                if(partida.getVencedor() != null) {
+                        return -4;
+                }
+
+                // jogada invalida
+                if(jogadas < 1 || jogadas > partida.getProximoJogador().getBolas()) {
+                        return -5;
+                }
+
+                partida.setJogadas(jogadas);
+
+                // jogada valida
+                return 1;
+        }
+
+
+
+
         return -1;
     }
+    
+    @WebMethod(operationName = "jogaDado")
+    public int jogaDado(@WebParam(name = "id") int id) {
+        Partida partida = this.getPartida(id);
 
-    public void print() {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 2; j++) {
-                //  System.out.println(this.registro[i][j]);
-            }
+        // caso ainda n�o tenha partida
+        if(partida == null || partida.getJogador1() == null) {
+                return -2;
         }
-    }
 
-    public void printpre() {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 2; j++) {
-                //  System.out.println(this.preRegistro[i][j]);
-            }
+        //erro, acredito que seja n�o ter o jogador 2
+        if(partida.getJogador2() == null) {
+                return -1;
         }
+
+        // caso n�o seja a vez do jogaodr
+        if(partida.getProximoJogador().getIndentificador() != id) {
+                return -3;
+        }
+
+        if(partida.getProximoJogador().getIndentificador()== id) {
+                // � a vez do jogador mas o jogo j� foi encerrado
+                if(partida.getVencedor() != null) {
+                        return -4;
+                }
+
+                return partida.jogaDados();
+        }
+
+
+        return -1;
     }
 }

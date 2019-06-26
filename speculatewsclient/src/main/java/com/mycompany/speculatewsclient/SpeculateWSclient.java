@@ -26,9 +26,9 @@ public class SpeculateWSclient {
         port = service.getSpeculatePort();
 
         
-        //executaTeste("Speculate-0000",false);
-        //executaTeste("Speculate-1000",false);
-        executaTeste("Speculate-2000",false);
+       // executaTeste("Speculate-0000",false);
+        executaTeste("Speculate-1000",false);
+      //  executaTeste("Speculate-2000",false);
         //1min38s
         /*
         String[] testePar1 = {"Speculate-2000","Speculate-2250","Speculate-2500","Speculate-2750"};
